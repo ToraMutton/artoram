@@ -2,7 +2,7 @@ import { GeometricCanvas } from './components/GeometricCanvas';
 
 function App() {
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden">
+    <div className="h-dvh w-screen flex flex-col overflow-hidden">
 
       {/* ヘッダー */}
       <div className="shrink-0 px-6 py-3 flex justify-between items-center pointer-events-none">

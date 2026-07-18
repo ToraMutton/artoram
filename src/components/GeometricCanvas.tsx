@@ -37,7 +37,7 @@ const hexToRgb = (hex: string) => {
 };
 
 // ボタンの共通スタイル（プライマリ/セカンダリでhover・focus・disabledを統一）
-const buttonBaseClass = "px-8 py-2 rounded font-bold whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] disabled:opacity-50 disabled:cursor-not-allowed lg:w-full lg:px-2";
+const buttonBaseClass = "w-full px-2 py-2 rounded font-bold text-xs sm:text-sm whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] disabled:opacity-50 disabled:cursor-not-allowed";
 const buttonPrimaryClass = `${buttonBaseClass} bg-[#00b259] hover:bg-[#00994d] text-white focus-visible:ring-[#00b259]`;
 const buttonSecondaryClass = `${buttonBaseClass} border border-[#444444] hover:border-[#00b259] hover:text-[#00b259] text-gray-400 focus-visible:ring-[#00b259]`;
 
@@ -67,7 +67,8 @@ export const GeometricCanvas = () => {
     };
   });
 
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  // モバイルでは初期状態を閉じておき、キャンバスの表示領域を優先する（デスクトップは常時表示のため影響しない）
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // 動画出力（WebM）関連の状態
   const [isRecording, setIsRecording] = useState(false);
@@ -263,13 +264,18 @@ export const GeometricCanvas = () => {
       const resizeCanvas = () => {
         const dpr = window.devicePixelRatio || 1;
 
-        // アスペクト比を計算
-        const { w: resW, h: resH } = RESOLUTIONS[paramsRef.current.resolution];
+        // アスペクト比を計算（不正な解像度キーが来てもクラッシュしないようフォールバック）
+        const resolution = RESOLUTIONS[paramsRef.current.resolution] ?? RESOLUTIONS['FHD (1080p)'];
+        const { w: resW, h: resH } = resolution;
         const aspectRatio = resW / resH;
 
         // 表示領域（ヘッダー〜パネルの空き領域）の実際のサイズを直接測る
         const availableW = canvasArea.clientWidth;
         const availableH = canvasArea.clientHeight;
+
+        // レイアウトが確定する前（モバイルでアドレスバーの表示/非表示が切り替わる瞬間など）
+        // 表示領域が一時的に0になることがあるため、その場合は今回の更新をスキップする
+        if (availableW <= 0 || availableH <= 0) return;
 
         let canvasW = availableW;
         let canvasH = availableW / aspectRatio;
@@ -468,16 +474,16 @@ export const GeometricCanvas = () => {
       </div>
 
       {/* UIパネル（モバイル:下部シート / デスクトップ:右サイドバー、浮いたカード風） */}
-      <div className="shrink-0 px-6 py-4 bg-[#111111]/75 backdrop-blur-md border-t border-x border-white/10 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.35)] lg:w-[clamp(400px,28vw,480px)] lg:h-full lg:overflow-hidden lg:py-3 lg:[@media(max-height:800px)]:py-2 lg:border-t-0 lg:border-x-0 lg:border-l lg:border-y lg:rounded-t-none lg:rounded-l-2xl lg:shadow-[-8px_0_30px_rgba(0,0,0,0.35)] font-sans text-sm">
+      <div className="shrink-0 px-4 py-3 sm:px-6 bg-[#111111]/75 backdrop-blur-md border-t border-x border-white/10 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.35)] max-h-[70dvh] overflow-y-auto lg:w-[clamp(400px,28vw,480px)] lg:h-full lg:max-h-none lg:overflow-hidden lg:py-3 lg:[@media(max-height:800px)]:py-2 lg:border-t-0 lg:border-x-0 lg:border-l lg:border-y lg:rounded-t-none lg:rounded-l-2xl lg:shadow-[-8px_0_30px_rgba(0,0,0,0.35)] font-sans text-sm">
 
         {/* アルゴリズム */}
-        <div className="mb-4 lg:mb-3 lg:[@media(max-height:800px)]:mb-2">
+        <div className="mb-3 lg:[@media(max-height:800px)]:mb-2">
           <SectionLabel>アルゴリズム</SectionLabel>
           <select
             value={params.mode}
             onChange={(e) => updateParam('mode', e.target.value)}
             disabled={isRecording}
-            className="w-full sm:w-64 lg:w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="Wave">Wave (サイン波)</option>
             <option value="Chaos">Chaos (タンジェント)</option>
@@ -503,10 +509,10 @@ export const GeometricCanvas = () => {
         </div>
 
         {/* 形状 / モーション（モバイルでは開閉可能、デスクトップでは常時表示） */}
-        <div className={`space-y-4 mb-4 lg:space-y-3 lg:mb-3 lg:[@media(max-height:800px)]:space-y-2 lg:[@media(max-height:800px)]:mb-2 ${isPanelOpen ? 'block' : 'hidden'} lg:block`}>
+        <div className={`space-y-3 mb-3 lg:[@media(max-height:800px)]:space-y-2 lg:[@media(max-height:800px)]:mb-2 ${isPanelOpen ? 'block' : 'hidden'} lg:block`}>
           <div>
             <SectionLabel>形状</SectionLabel>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-4 lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
+            <div className="grid grid-cols-2 gap-3 lg:[@media(max-height:800px)]:gap-2">
               <Slider label="頂点数" value={params.points} min={10} max={2000} step={1} onChange={(v) => updateParam('points', v)} disabled={isRecording} />
               <Slider label="波の数 / 頂点係数" value={params.waves} min={1} max={50} step={1} onChange={(v) => updateParam('waves', v)} disabled={isRecording} />
               <Slider label="振幅 / 歪み" value={params.waveHeight} min={0} max={500} step={1} onChange={(v) => updateParam('waveHeight', v)} disabled={isRecording} />
@@ -516,7 +522,7 @@ export const GeometricCanvas = () => {
 
           <div>
             <SectionLabel>モーション</SectionLabel>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4 lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
+            <div className="grid grid-cols-2 gap-3 lg:[@media(max-height:800px)]:gap-2">
               <Slider label="回転速度" value={params.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateParam('rotationSpeed', v)} disabled={isRecording} />
               <Slider label="時間変化速度" value={params.waveSpeed} min={-10} max={10} step={0.1} onChange={(v) => updateParam('waveSpeed', v)} disabled={isRecording} />
               <Slider label="残像の濃さ" value={params.fadeOpacity} min={0.01} max={0.5} step={0.01} onChange={(v) => updateParam('fadeOpacity', v)} disabled={isRecording} />
@@ -526,7 +532,7 @@ export const GeometricCanvas = () => {
 
         {/* 録画中の進行状況・注意文 */}
         {isRecording && (
-          <div className="mb-4">
+          <div className="mb-3">
             <div className="text-yellow-400 text-xs mb-1">
               録画中… {(recordingProgress * 5).toFixed(1)} / 5.0秒 ※録画中はタブを切り替えないでください（映像が乱れる可能性があります）
             </div>
@@ -540,13 +546,13 @@ export const GeometricCanvas = () => {
         )}
 
         {/* カラー / 出力 */}
-        <div className="flex flex-wrap gap-6 items-end lg:flex-col lg:items-stretch lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
+        <div className="flex flex-col gap-3 items-stretch lg:[@media(max-height:800px)]:gap-2">
           {/* スマホ用開閉ボタン */}
           <button
             onClick={() => setIsPanelOpen(prev => !prev)}
-            className="px-3 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-gray-400 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] focus-visible:ring-[#00b259] lg:hidden"
+            className="self-start px-3 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-gray-400 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] focus-visible:ring-[#00b259] lg:hidden"
           >
-            {isPanelOpen ? '▼' : '▲'}
+            {isPanelOpen ? '▼ 詳細設定を閉じる' : '▲ 詳細設定を開く'}
           </button>
 
           {/* カラー */}
@@ -577,10 +583,10 @@ export const GeometricCanvas = () => {
           </div>
 
           {/* 出力 */}
-          <div className="flex flex-col gap-2 flex-1 sm:border-l sm:border-white/10 sm:pl-6 lg:border-l-0 lg:pl-0 lg:border-t lg:border-white/10 lg:pt-3 lg:[@media(max-height:800px)]:pt-2">
+          <div className="flex flex-col gap-2 pt-3 border-t border-white/10 lg:[@media(max-height:800px)]:pt-2">
             <SectionLabel>出力</SectionLabel>
-            <div className="flex flex-wrap gap-4 items-end lg:grid lg:grid-cols-3 lg:gap-2 lg:items-stretch">
-              <div className="flex-1 min-w-[140px] lg:flex-none lg:col-span-3">
+            <div className="grid grid-cols-3 gap-2 items-stretch">
+              <div className="col-span-3">
                 <label className="block mb-1 text-gray-400">解像度</label>
                 <select
                   value={params.resolution}
@@ -630,15 +636,15 @@ export const GeometricCanvas = () => {
 
 // セクション見出し用コンポーネント
 const SectionLabel = ({ children }: { children: string }) => (
-  <div className="text-[11px] font-semibold tracking-wider text-gray-500 mb-2 lg:mb-1">
+  <div className="text-[11px] font-semibold tracking-wider text-gray-500 mb-1.5 lg:mb-1">
     {children}
   </div>
 );
 
 // スライダー用コンポーネント
 const Slider = ({ label, value, min, max, step, onChange, disabled }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, disabled?: boolean }) => (
-  <div className="mb-3 lg:mb-2 lg:[@media(max-height:800px)]:mb-1">
-    <div className="flex justify-between text-gray-400 mb-1 lg:mb-0.5 text-xs">
+  <div className="mb-2 lg:[@media(max-height:800px)]:mb-1">
+    <div className="flex justify-between text-gray-400 mb-1 text-xs">
       <span>{label}</span>
       <span className="font-mono">{value}</span>
     </div>
