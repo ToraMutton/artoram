@@ -29,6 +29,12 @@ const RESOLUTIONS = {
   'Android (1080×2400)': { w: 1080, h: 2400 },
 };
 
+// 動画書き出し時の長辺の上限(px)
+// PNG保存と違い、動画は選択解像度のキャンバスを5秒間エンコードし続けるためメモリ負荷が大きく、
+// フル解像度のままだとモバイルSafariでタブごとクラッシュ(白画面化)することがあるため、
+// アスペクト比を保ったまま安全なサイズに縮小する
+const MAX_VIDEO_DIMENSION = 1280;
+
 const hexToRgb = (hex: string) => {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -413,7 +419,11 @@ export const GeometricCanvas = () => {
       return;
     }
 
-    const { w, h } = RESOLUTIONS[params.resolution];
+    // 選択中の解像度のアスペクト比は保ったまま、長辺がMAX_VIDEO_DIMENSIONを超える場合は縮小する
+    const { w: targetW, h: targetH } = RESOLUTIONS[params.resolution];
+    const videoScale = Math.min(1, MAX_VIDEO_DIMENSION / Math.max(targetW, targetH));
+    const w = Math.round(targetW * videoScale);
+    const h = Math.round(targetH * videoScale);
 
     // 録画専用のオフスクリーンキャンバス（画面には表示しない）
     const offscreen = document.createElement('canvas');
