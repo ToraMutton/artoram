@@ -63,7 +63,11 @@ export const GeometricCanvas = () => {
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
 
-  const paramsRef = useRef(params); // 
+  // 動画出力（WebM）関連の状態
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingProgress, setRecordingProgress] = useState(0); // 0〜1
+
+  const paramsRef = useRef(params); //
   useEffect(() => {
     paramsRef.current = params;
     resizeCanvasRef.current();
@@ -295,6 +299,97 @@ export const GeometricCanvas = () => {
     link.click();
   };
 
+  // 動画出力（WebM, 5秒固定 / 30fps固定 / 現在の解像度を使用）
+  const handleExportVideo = () => {
+    if (isRecording) return;
+
+    // ブラウザの対応状況を確認（対応コーデックの優先順位付きリスト）
+    if (typeof MediaRecorder === 'undefined' || typeof HTMLCanvasElement.prototype.captureStream !== 'function') {
+      window.alert('このブラウザは動画出力に対応していません。');
+      return;
+    }
+    const mimeCandidates = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    const mimeType = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) {
+      window.alert('このブラウザは動画出力に対応していません。');
+      return;
+    }
+
+    const { w, h } = RESOLUTIONS[params.resolution];
+
+    // 録画専用のオフスクリーンキャンバス（画面には表示しない）
+    const offscreen = document.createElement('canvas');
+    offscreen.width = w;
+    offscreen.height = h;
+    const oCtx = offscreen.getContext('2d');
+    if (!oCtx) return;
+
+    oCtx.fillStyle = params.bgColor;
+    oCtx.fillRect(0, 0, w, h);
+
+    setIsRecording(true);
+    setRecordingProgress(0);
+
+    // ウォームアップ：録画開始前に残像を事前に蓄積しておく
+    const warmupFrames = 60;
+    const baseTime = timeRef.current;
+    for (let i = warmupFrames; i >= 1; i--) {
+      drawPath(oCtx, w, h, params, baseTime - i * 0.01);
+    }
+
+    const fps = 30;
+    const durationMs = 5000;
+
+    const stream = offscreen.captureStream(fps);
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `toramatsu-art-${params.resolution.split(' ')[0]}-${Date.now()}.webm`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      setIsRecording(false);
+      setRecordingProgress(0);
+    };
+
+    recorder.start();
+
+    // captureStreamは「今キャンバスに描かれている内容」を撮るだけなので、
+    // 録画中もこちらで描き続ける必要がある
+    const startedAt = performance.now();
+    let exportTime = baseTime;
+
+    const tick = () => {
+      exportTime += 0.01;
+      drawPath(oCtx, w, h, params, exportTime);
+
+      const elapsed = performance.now() - startedAt;
+      setRecordingProgress(Math.min(elapsed / durationMs, 1));
+
+      if (elapsed < durationMs) {
+        requestAnimationFrame(tick);
+      } else {
+        recorder.stop();
+      }
+    };
+    requestAnimationFrame(tick);
+  };
+
   return (
     <>
       <canvas
@@ -316,13 +411,28 @@ export const GeometricCanvas = () => {
         {/* スライダー7列 */}
         {isPanelOpen && (
           < div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-3">
-            <Slider label="頂点数" value={params.points} min={10} max={2000} step={1} onChange={(v) => updateParam('points', v)} />
-            <Slider label="波の数 / 頂点係数" value={params.waves} min={1} max={50} step={1} onChange={(v) => updateParam('waves', v)} />
-            <Slider label="振幅 / 歪み" value={params.waveHeight} min={0} max={500} step={1} onChange={(v) => updateParam('waveHeight', v)} />
-            <Slider label="基本半径" value={params.baseRadius} min={10} max={1500} step={1} onChange={(v) => updateParam('baseRadius', v)} />
-            <Slider label="回転速度" value={params.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateParam('rotationSpeed', v)} />
-            <Slider label="時間変化速度" value={params.waveSpeed} min={-10} max={10} step={0.1} onChange={(v) => updateParam('waveSpeed', v)} />
-            <Slider label="残像の濃さ" value={params.fadeOpacity} min={0.01} max={0.5} step={0.01} onChange={(v) => updateParam('fadeOpacity', v)} />
+            <Slider label="頂点数" value={params.points} min={10} max={2000} step={1} onChange={(v) => updateParam('points', v)} disabled={isRecording} />
+            <Slider label="波の数 / 頂点係数" value={params.waves} min={1} max={50} step={1} onChange={(v) => updateParam('waves', v)} disabled={isRecording} />
+            <Slider label="振幅 / 歪み" value={params.waveHeight} min={0} max={500} step={1} onChange={(v) => updateParam('waveHeight', v)} disabled={isRecording} />
+            <Slider label="基本半径" value={params.baseRadius} min={10} max={1500} step={1} onChange={(v) => updateParam('baseRadius', v)} disabled={isRecording} />
+            <Slider label="回転速度" value={params.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateParam('rotationSpeed', v)} disabled={isRecording} />
+            <Slider label="時間変化速度" value={params.waveSpeed} min={-10} max={10} step={0.1} onChange={(v) => updateParam('waveSpeed', v)} disabled={isRecording} />
+            <Slider label="残像の濃さ" value={params.fadeOpacity} min={0.01} max={0.5} step={0.01} onChange={(v) => updateParam('fadeOpacity', v)} disabled={isRecording} />
+          </div>
+        )}
+
+        {/* 録画中の進行状況・注意文 */}
+        {isRecording && (
+          <div className="mb-3">
+            <div className="text-yellow-400 text-xs mb-1">
+              録画中… {(recordingProgress * 5).toFixed(1)} / 5.0秒 ※録画中はタブを切り替えないでください（映像が乱れる可能性があります）
+            </div>
+            <div className="w-full h-1.5 bg-[#2d2d2d] rounded overflow-hidden">
+              <div
+                className="h-full bg-[#00b259] transition-[width]"
+                style={{ width: `${recordingProgress * 100}%` }}
+              />
+            </div>
           </div>
         )}
 
@@ -342,7 +452,8 @@ export const GeometricCanvas = () => {
               type="color"
               value={params.bgColor}
               onChange={(e) => updateParam('bgColor', e.target.value)}
-              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d]"
+              disabled={isRecording}
+              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -353,7 +464,8 @@ export const GeometricCanvas = () => {
               type="color"
               value={params.strokeColor}
               onChange={(e) => updateParam('strokeColor', e.target.value)}
-              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d]"
+              disabled={isRecording}
+              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
           {/* アルゴリズム */}
@@ -362,7 +474,8 @@ export const GeometricCanvas = () => {
             <select
               value={params.mode}
               onChange={(e) => updateParam('mode', e.target.value)}
-              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259]"
+              disabled={isRecording}
+              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="Wave">Wave (サイン波)</option>
               <option value="Chaos">Chaos (タンジェント)</option>
@@ -382,7 +495,8 @@ export const GeometricCanvas = () => {
             <select
               value={params.resolution}
               onChange={(e) => updateParam('resolution', e.target.value)}
-              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259]"
+              disabled={isRecording}
+              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {Object.keys(RESOLUTIONS).map(res => (
                 <option key={res} value={res}>{res}</option>
@@ -393,7 +507,8 @@ export const GeometricCanvas = () => {
           {/* ランダムボタン */}
           <button
             onClick={randomize}
-            className="px-8 py-2 border border-[#444444] hover:border-[#00b259] hover:text-[#00b259] text-gray-400 font-bold rounded transition-colors whitespace-nowrap"
+            disabled={isRecording}
+            className="px-8 py-2 border border-[#444444] hover:border-[#00b259] hover:text-[#00b259] text-gray-400 font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ランダム
           </button>
@@ -401,9 +516,19 @@ export const GeometricCanvas = () => {
           {/* 画像を保存ボタン */}
           <button
             onClick={handleDownload}
-            className="px-8 py-2 bg-[#00b259] hover:bg-[#00994d] text-white font-bold rounded transition-colors whitespace-nowrap"
+            disabled={isRecording}
+            className="px-8 py-2 bg-[#00b259] hover:bg-[#00994d] text-white font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           >
             画像を保存
+          </button>
+
+          {/* 動画を保存ボタン（WebM） */}
+          <button
+            onClick={handleExportVideo}
+            disabled={isRecording}
+            className="px-8 py-2 bg-[#2d6cdf] hover:bg-[#2559b8] text-white font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRecording ? '録画中...' : '動画を保存'}
           </button>
         </div>
       </div >
@@ -412,7 +537,7 @@ export const GeometricCanvas = () => {
 };
 
 // スライダー用コンポーネント
-const Slider = ({ label, value, min, max, step, onChange }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void }) => (
+const Slider = ({ label, value, min, max, step, onChange, disabled }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, disabled?: boolean }) => (
   <div className="mb-3">
     <div className="flex justify-between text-gray-400 mb-1 text-xs">
       <span>{label}</span>
@@ -425,7 +550,8 @@ const Slider = ({ label, value, min, max, step, onChange }: { label: string, val
       step={step}
       value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-full accent-[#00b259]"
+      disabled={disabled}
+      className="w-full accent-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
     />
   </div>
 );
