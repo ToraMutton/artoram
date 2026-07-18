@@ -79,14 +79,20 @@ export const GeometricCanvas = () => {
     paramsRef.current = params;
     resizeCanvasRef.current();
 
-    // URLを更新
-    const p = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      p.set(key, String(value));
-    });
-    window.history.replaceState(null, '', `?${p.toString()}`);
+    // URL更新はデバウンスする（スライダー操作中に history.replaceState を連打すると
+    // iOS の WebKit(Safari/iOS版Chrome共通)でメモリが解放されずクラッシュすることがあるため）
+    const timeoutId = setTimeout(() => {
+      const p = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        p.set(key, String(value));
+      });
+      window.history.replaceState(null, '', `?${p.toString()}`);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
   }, [params]);
   const canvasSizeRef = useRef({ w: window.innerWidth, h: window.innerHeight });
+  const lastCanvasPixelSizeRef = useRef<{ w: number, h: number } | null>(null); // 直近に確保した描画バッファのpxサイズ
 
   // 描画ロジック（画面用とダウンロード用で使い回すため分離）
   const drawPath = (ctx: CanvasRenderingContext2D, w: number, h: number, currentParams: Params, time: number) => {
@@ -285,19 +291,31 @@ export const GeometricCanvas = () => {
           canvasW = availableH * aspectRatio;
         }
 
-        // キャンバスのサイズを設定
+        // サイズが前回から変わっていなければcanvas.width/heightへの再代入をスキップする
+        // (この代入は描画バッファを毎回破棄・再確保する重い処理で、パラメータ変更のたびに
+        // 無条件で行うとiOSのWebKitでメモリを圧迫しクラッシュの原因になり得るため)
+        const lastSize = lastCanvasPixelSizeRef.current;
+        const nextPixelW = Math.round(canvasW * dpr);
+        const nextPixelH = Math.round(canvasH * dpr);
+        const sizeChanged = !lastSize || lastSize.w !== nextPixelW || lastSize.h !== nextPixelH;
+
+        // キャンバスの表示サイズ(CSS)は常に最新に合わせる
         canvas.style.width = `${canvasW}px`;
         canvas.style.height = `${canvasH}px`;
-        canvas.width = canvasW * dpr;
-        canvas.height = canvasH * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        if (sizeChanged) {
+          canvas.width = nextPixelW;
+          canvas.height = nextPixelH;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          lastCanvasPixelSizeRef.current = { w: nextPixelW, h: nextPixelH };
+
+          // 描画バッファを作り直した直後だけ背景を塗っておく(通常はrenderループのfillRectに任せる)
+          ctx.fillStyle = paramsRef.current.bgColor;
+          ctx.fillRect(0, 0, canvasW, canvasH);
+        }
 
         // refに保存（renderから読むため）
         canvasSizeRef.current = { w: canvasW, h: canvasH };
-
-        // 背景を黒く塗る
-        ctx.fillStyle = paramsRef.current.bgColor;
-        ctx.fillRect(0, 0, canvasW, canvasH);
       };
       resizeCanvasRef.current = resizeCanvas;
 
