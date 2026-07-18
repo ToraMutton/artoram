@@ -2,10 +2,10 @@ import { GeometricCanvas } from './components/GeometricCanvas';
 
 function App() {
   return (
-    <div>
+    <div className="h-screen w-screen flex flex-col overflow-hidden">
 
       {/* ヘッダー */}
-      <div className="fixed top-0 left-0 right-0 z-10 px-6 py-3 flex justify-between items-center pointer-events-none">
+      <div className="shrink-0 px-6 py-3 flex justify-between items-center pointer-events-none">
 
         {/* ロゴ + タイトル */}
         <div className="flex items-center gap-2">
@@ -36,8 +36,10 @@ function App() {
 
       </div>
 
-      {/* メイン: キャンパス + UIパネル */}
-      <GeometricCanvas />
+      {/* メイン: キャンバス + UIパネル（モバイル:縦積み / デスクトップ:横並び） */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+        <GeometricCanvas />
+      </div>
 
     </div>
   );

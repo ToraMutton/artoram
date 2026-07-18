@@ -36,10 +36,16 @@ const hexToRgb = (hex: string) => {
   return `${r}, ${g}, ${b}`;
 };
 
+// ボタンの共通スタイル（プライマリ/セカンダリでhover・focus・disabledを統一）
+const buttonBaseClass = "px-8 py-2 rounded font-bold whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] disabled:opacity-50 disabled:cursor-not-allowed lg:w-full lg:px-2";
+const buttonPrimaryClass = `${buttonBaseClass} bg-[#00b259] hover:bg-[#00994d] text-white focus-visible:ring-[#00b259]`;
+const buttonSecondaryClass = `${buttonBaseClass} border border-[#444444] hover:border-[#00b259] hover:text-[#00b259] text-gray-400 focus-visible:ring-[#00b259]`;
+
 // ============================================
 
 export const GeometricCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasAreaRef = useRef<HTMLDivElement>(null); // ヘッダー〜パネルの空き領域（キャンバスの表示枠）
   const resizeCanvasRef = useRef<() => void>(() => { });
   const timeRef = useRef(0); // アニメーションの時間を保持
 
@@ -187,27 +193,26 @@ export const GeometricCanvas = () => {
   useEffect(
     () => { // 関数部分
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      const canvasArea = canvasAreaRef.current;
+      if (!canvas || !canvasArea) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
       let animationFrameId: number;
 
       const resizeCanvas = () => {
-        // まずウィンドウサイズを取得
-        const { innerWidth, innerHeight } = window;
         const dpr = window.devicePixelRatio || 1;
 
         // アスペクト比を計算
         const { w: resW, h: resH } = RESOLUTIONS[paramsRef.current.resolution];
         const aspectRatio = resW / resH;
 
-        // ウィンドウに収まる最大サイズを計算
-        const panelHeight = 100  // パネルの高さの概算
-        const availableH = innerHeight - panelHeight
+        // 表示領域（ヘッダー〜パネルの空き領域）の実際のサイズを直接測る
+        const availableW = canvasArea.clientWidth;
+        const availableH = canvasArea.clientHeight;
 
-        let canvasW = innerWidth;
-        let canvasH = innerWidth / aspectRatio;
+        let canvasW = availableW;
+        let canvasH = availableW / aspectRatio;
 
         if (canvasH > availableH) {
           canvasH = availableH;
@@ -230,9 +235,12 @@ export const GeometricCanvas = () => {
       };
       resizeCanvasRef.current = resizeCanvas;
 
-      // リサイズ時に呼ぶ
-      window.addEventListener('resize', resizeCanvas);
       resizeCanvas(); // 初回用呼び出し
+
+      // 表示領域の実サイズが変わるたび（ウィンドウリサイズ、ヘッダー/パネルの高さ変化、
+      // 開閉・録画バー表示・折り返し等）に追従させる
+      const areaObserver = new ResizeObserver(resizeCanvas);
+      areaObserver.observe(canvasArea);
 
       const render = () => {
         timeRef.current += 0.01;
@@ -243,7 +251,7 @@ export const GeometricCanvas = () => {
       render();
 
       return () => {
-        window.removeEventListener('resize', resizeCanvas);
+        areaObserver.disconnect();
         cancelAnimationFrame(animationFrameId);
       };
     },
@@ -392,38 +400,61 @@ export const GeometricCanvas = () => {
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        style={{
-          display: 'block',
-          position: 'fixed',
-          top: 'calc(50% - 60px)',  // 60px上にずらす
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: -1
-        }}
-      />
+      {/* キャンバス表示領域：残り幅・残り高さいっぱいに広がり、中でキャンバスを中央揃え */}
+      <div ref={canvasAreaRef} className="flex-1 min-h-0 lg:min-w-0 flex items-center justify-center overflow-hidden">
+        <canvas ref={canvasRef} style={{ display: 'block' }} />
+      </div>
 
-      {/* UIパネル */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 px-6 py-3 bg-[#111111]/80 font-sans text-sm">
+      {/* UIパネル（モバイル:下部シート / デスクトップ:右サイドバー、浮いたカード風） */}
+      <div className="shrink-0 px-6 py-4 bg-[#111111]/75 backdrop-blur-md border-t border-x border-white/10 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.35)] lg:w-[clamp(400px,28vw,480px)] lg:h-full lg:overflow-hidden lg:py-3 lg:[@media(max-height:800px)]:py-2 lg:border-t-0 lg:border-x-0 lg:border-l lg:border-y lg:rounded-t-none lg:rounded-l-2xl lg:shadow-[-8px_0_30px_rgba(0,0,0,0.35)] font-sans text-sm">
 
+        {/* アルゴリズム */}
+        <div className="mb-4 lg:mb-3 lg:[@media(max-height:800px)]:mb-2">
+          <SectionLabel>アルゴリズム</SectionLabel>
+          <select
+            value={params.mode}
+            onChange={(e) => updateParam('mode', e.target.value)}
+            disabled={isRecording}
+            className="w-full sm:w-64 lg:w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="Wave">Wave (サイン波)</option>
+            <option value="Chaos">Chaos (タンジェント)</option>
+            <option value="Star">Star (星型)</option>
+            <option value="Rose">Rose (バラ曲線)</option>
+            <option value="Spirograph">Spirograph (トロコイド風)</option>
+            <option value="Polygon">Polygon (多角形)</option>
+            <option value="Butterfly">Butterfly (蝶の羽)</option>
+            <option value="Lissajous">Lissajous (リサジュー)</option>
+            <option value="Web">Web (クモの巣)</option>
+            <option value="Heart">Heart (ハート型)</option>
+          </select>
+        </div>
 
-        {/* スライダー7列 */}
-        {isPanelOpen && (
-          < div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-3">
-            <Slider label="頂点数" value={params.points} min={10} max={2000} step={1} onChange={(v) => updateParam('points', v)} disabled={isRecording} />
-            <Slider label="波の数 / 頂点係数" value={params.waves} min={1} max={50} step={1} onChange={(v) => updateParam('waves', v)} disabled={isRecording} />
-            <Slider label="振幅 / 歪み" value={params.waveHeight} min={0} max={500} step={1} onChange={(v) => updateParam('waveHeight', v)} disabled={isRecording} />
-            <Slider label="基本半径" value={params.baseRadius} min={10} max={1500} step={1} onChange={(v) => updateParam('baseRadius', v)} disabled={isRecording} />
-            <Slider label="回転速度" value={params.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateParam('rotationSpeed', v)} disabled={isRecording} />
-            <Slider label="時間変化速度" value={params.waveSpeed} min={-10} max={10} step={0.1} onChange={(v) => updateParam('waveSpeed', v)} disabled={isRecording} />
-            <Slider label="残像の濃さ" value={params.fadeOpacity} min={0.01} max={0.5} step={0.01} onChange={(v) => updateParam('fadeOpacity', v)} disabled={isRecording} />
+        {/* 形状 / モーション（モバイルでは開閉可能、デスクトップでは常時表示） */}
+        <div className={`space-y-4 mb-4 lg:space-y-3 lg:mb-3 lg:[@media(max-height:800px)]:space-y-2 lg:[@media(max-height:800px)]:mb-2 ${isPanelOpen ? 'block' : 'hidden'} lg:block`}>
+          <div>
+            <SectionLabel>形状</SectionLabel>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-4 lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
+              <Slider label="頂点数" value={params.points} min={10} max={2000} step={1} onChange={(v) => updateParam('points', v)} disabled={isRecording} />
+              <Slider label="波の数 / 頂点係数" value={params.waves} min={1} max={50} step={1} onChange={(v) => updateParam('waves', v)} disabled={isRecording} />
+              <Slider label="振幅 / 歪み" value={params.waveHeight} min={0} max={500} step={1} onChange={(v) => updateParam('waveHeight', v)} disabled={isRecording} />
+              <Slider label="基本半径" value={params.baseRadius} min={10} max={1500} step={1} onChange={(v) => updateParam('baseRadius', v)} disabled={isRecording} />
+            </div>
           </div>
-        )}
+
+          <div>
+            <SectionLabel>モーション</SectionLabel>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4 lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
+              <Slider label="回転速度" value={params.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateParam('rotationSpeed', v)} disabled={isRecording} />
+              <Slider label="時間変化速度" value={params.waveSpeed} min={-10} max={10} step={0.1} onChange={(v) => updateParam('waveSpeed', v)} disabled={isRecording} />
+              <Slider label="残像の濃さ" value={params.fadeOpacity} min={0.01} max={0.5} step={0.01} onChange={(v) => updateParam('fadeOpacity', v)} disabled={isRecording} />
+            </div>
+          </div>
+        </div>
 
         {/* 録画中の進行状況・注意文 */}
         {isRecording && (
-          <div className="mb-3">
+          <div className="mb-4">
             <div className="text-yellow-400 text-xs mb-1">
               録画中… {(recordingProgress * 5).toFixed(1)} / 5.0秒 ※録画中はタブを切り替えないでください（映像が乱れる可能性があります）
             </div>
@@ -436,110 +467,106 @@ export const GeometricCanvas = () => {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-4 items-end">
+        {/* カラー / 出力 */}
+        <div className="flex flex-wrap gap-6 items-end lg:flex-col lg:items-stretch lg:gap-3 lg:[@media(max-height:800px)]:gap-2">
           {/* スマホ用開閉ボタン */}
           <button
             onClick={() => setIsPanelOpen(prev => !prev)}
-            className="px-3 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-gray-400 rounded transition-colors lg:hidden"
+            className="px-3 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-gray-400 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111] focus-visible:ring-[#00b259] lg:hidden"
           >
             {isPanelOpen ? '▼' : '▲'}
           </button>
 
-          {/* 背景色 */}
+          {/* カラー */}
           <div>
-            <label className="block mb-1 text-gray-400">背景色</label>
-            <input
-              type="color"
-              value={params.bgColor}
-              onChange={(e) => updateParam('bgColor', e.target.value)}
-              disabled={isRecording}
-              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-            />
+            <SectionLabel>カラー</SectionLabel>
+            <div className="flex gap-3">
+              <div>
+                <label className="block mb-1 text-gray-400">背景色</label>
+                <input
+                  type="color"
+                  value={params.bgColor}
+                  onChange={(e) => updateParam('bgColor', e.target.value)}
+                  disabled={isRecording}
+                  className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-gray-400">線の色</label>
+                <input
+                  type="color"
+                  value={params.strokeColor}
+                  onChange={(e) => updateParam('strokeColor', e.target.value)}
+                  disabled={isRecording}
+                  className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* 線の色 */}
-          <div>
-            <label className="block mb-1 text-gray-400">線の色</label>
-            <input
-              type="color"
-              value={params.strokeColor}
-              onChange={(e) => updateParam('strokeColor', e.target.value)}
-              disabled={isRecording}
-              className="w-10 h-8 rounded cursor-pointer bg-transparent border border-[#3d3d3d] disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </div>
-          {/* アルゴリズム */}
-          <div className="flex-1">
-            <label className="block mb-1 text-gray-400">アルゴリズム</label>
-            <select
-              value={params.mode}
-              onChange={(e) => updateParam('mode', e.target.value)}
-              disabled={isRecording}
-              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="Wave">Wave (サイン波)</option>
-              <option value="Chaos">Chaos (タンジェント)</option>
-              <option value="Star">Star (星型)</option>
-              <option value="Rose">Rose (バラ曲線)</option>
-              <option value="Spirograph">Spirograph (トロコイド風)</option>
-              <option value="Polygon">Polygon (多角形)</option>
-              <option value="Butterfly">Butterfly (蝶の羽)</option>
-              <option value="Lissajous">Lissajous (リサジュー)</option>
-              <option value="Web">Web (クモの巣)</option>
-              <option value="Heart">Heart (ハート型)</option>
-            </select>
-          </div>
-          {/* 出力サイズ */}
-          <div className="flex-1">
-            <label className="block mb-1 text-gray-400">出力サイズ</label>
-            <select
-              value={params.resolution}
-              onChange={(e) => updateParam('resolution', e.target.value)}
-              disabled={isRecording}
-              className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {Object.keys(RESOLUTIONS).map(res => (
-                <option key={res} value={res}>{res}</option>
-              ))}
-            </select>
-          </div>
+          {/* 出力 */}
+          <div className="flex flex-col gap-2 flex-1 sm:border-l sm:border-white/10 sm:pl-6 lg:border-l-0 lg:pl-0 lg:border-t lg:border-white/10 lg:pt-3 lg:[@media(max-height:800px)]:pt-2">
+            <SectionLabel>出力</SectionLabel>
+            <div className="flex flex-wrap gap-4 items-end lg:grid lg:grid-cols-3 lg:gap-2 lg:items-stretch">
+              <div className="flex-1 min-w-[140px] lg:flex-none lg:col-span-3">
+                <label className="block mb-1 text-gray-400">解像度</label>
+                <select
+                  value={params.resolution}
+                  onChange={(e) => updateParam('resolution', e.target.value)}
+                  disabled={isRecording}
+                  className="w-full bg-[#2d2d2d] border border-[#3d3d3d] text-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-[#00b259] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {Object.keys(RESOLUTIONS).map(res => (
+                    <option key={res} value={res}>{res}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* ランダムボタン */}
-          <button
-            onClick={randomize}
-            disabled={isRecording}
-            className="px-8 py-2 border border-[#444444] hover:border-[#00b259] hover:text-[#00b259] text-gray-400 font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ランダム
-          </button>
+              {/* ランダムボタン（セカンダリ） */}
+              <button
+                onClick={randomize}
+                disabled={isRecording}
+                className={buttonSecondaryClass}
+              >
+                ランダム
+              </button>
 
-          {/* 画像を保存ボタン */}
-          <button
-            onClick={handleDownload}
-            disabled={isRecording}
-            className="px-8 py-2 bg-[#00b259] hover:bg-[#00994d] text-white font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            画像を保存
-          </button>
+              {/* 画像を保存ボタン（プライマリ） */}
+              <button
+                onClick={handleDownload}
+                disabled={isRecording}
+                className={buttonPrimaryClass}
+              >
+                画像を保存
+              </button>
 
-          {/* 動画を保存ボタン（WebM） */}
-          <button
-            onClick={handleExportVideo}
-            disabled={isRecording}
-            className="px-8 py-2 bg-[#2d6cdf] hover:bg-[#2559b8] text-white font-bold rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isRecording ? '録画中...' : '動画を保存'}
-          </button>
+              {/* 動画を保存ボタン（プライマリ、WebM） */}
+              <button
+                onClick={handleExportVideo}
+                disabled={isRecording}
+                className={buttonPrimaryClass}
+              >
+                {isRecording ? '録画中...' : '動画を保存'}
+              </button>
+            </div>
+          </div>
         </div>
-      </div >
+      </div>
     </>
   );
 };
 
+// セクション見出し用コンポーネント
+const SectionLabel = ({ children }: { children: string }) => (
+  <div className="text-[11px] font-semibold tracking-wider text-gray-500 mb-2 lg:mb-1">
+    {children}
+  </div>
+);
+
 // スライダー用コンポーネント
 const Slider = ({ label, value, min, max, step, onChange, disabled }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, disabled?: boolean }) => (
-  <div className="mb-3">
-    <div className="flex justify-between text-gray-400 mb-1 text-xs">
+  <div className="mb-3 lg:mb-2 lg:[@media(max-height:800px)]:mb-1">
+    <div className="flex justify-between text-gray-400 mb-1 lg:mb-0.5 text-xs">
       <span>{label}</span>
       <span className="font-mono">{value}</span>
     </div>
