@@ -112,7 +112,7 @@ export const GeometricCanvas = () => {
       // time × 速度の省略
       const t = time * currentParams.waveSpeed;
 
-      // 10種類の描画アルゴリズム
+      // 20種類の描画アルゴリズム
       switch (currentParams.mode) {
         case 'Wave': // サイン波
           radius += Math.sin(angle * currentParams.waves + t) * currentParams.waveHeight;
@@ -169,10 +169,70 @@ export const GeometricCanvas = () => {
           y += Math.cos(t) * currentParams.waveHeight * 0.1;
           break;
         }
+
+        case 'Epicycloid': { // エピサイクロイド(外側を転がる円の軌跡)
+          const R = currentParams.baseRadius;
+          const n = currentParams.waves + 2; // カスプ(尖り)の数
+          const r = R / n;
+          const d = r + currentParams.waveHeight * 0.3;
+          const k = (R + r) / r; // 常に整数になり2πで閉じる
+          x = (R + r) * Math.cos(angle) - d * Math.cos(k * angle + t);
+          y = (R + r) * Math.sin(angle) - d * Math.sin(k * angle + t);
+          break;
+        }
+
+        case 'Hypocycloid': { // ハイポサイクロイド(内側を転がる円の軌跡、星芒形)
+          const R = currentParams.baseRadius;
+          const n = currentParams.waves + 3; // カスプ(尖り)の数
+          const r = R / n;
+          const d = r + currentParams.waveHeight * 0.3;
+          const k = (R - r) / r; // 常に整数になり2πで閉じる
+          x = (R - r) * Math.cos(angle) + d * Math.cos(k * angle + t);
+          y = (R - r) * Math.sin(angle) - d * Math.sin(k * angle + t);
+          break;
+        }
+
+        case 'Lemniscate': // レムニスケート(∞字型)
+          radius = currentParams.baseRadius * Math.sqrt(Math.abs(Math.cos(2 * angle + t))) + currentParams.waveHeight * Math.sin(currentParams.waves * angle);
+          break;
+
+        case 'Snowflake': // 雪の結晶(三角波でシャープな枝分かれ)
+          radius += (2 / Math.PI) * Math.asin(Math.sin(currentParams.waves * angle + t)) * currentParams.waveHeight;
+          break;
+
+        case 'Flower': // 花(絶対値コサインで丸みのある花弁)
+          radius = currentParams.baseRadius * Math.pow(Math.abs(Math.cos(currentParams.waves * angle + t)), 0.5) + currentParams.waveHeight * 0.2;
+          break;
+
+        case 'Gear': // 歯車(矩形波でカクカクした歯)
+          radius += Math.sign(Math.sin(currentParams.waves * angle + t)) * currentParams.waveHeight;
+          break;
+
+        case 'Vortex': // 渦(振幅が回転しながら変化する渦巻き)
+          radius += Math.sin(currentParams.waves * angle + t) * currentParams.waveHeight * Math.sin(angle + t * 0.3);
+          break;
+
+        case 'Crystal': // 結晶(三角波の絶対値で角ばった面)
+          radius += (Math.abs(Math.sin(currentParams.waves * angle + t)) - 0.5) * currentParams.waveHeight;
+          break;
+
+        case 'Pulse': // 脈動(全体が呼吸するように拡縮 + 細かい鼓動)
+          radius += Math.sin(t * 2) * currentParams.waveHeight * 0.7 + Math.sin(currentParams.waves * angle) * currentParams.waveHeight * 0.3;
+          break;
+
+        case 'Nebula': // 星雲(複数の周波数を重ねた有機的な形)
+          radius +=
+            Math.sin(currentParams.waves * angle + t) * currentParams.waveHeight * 0.5 +
+            Math.sin((currentParams.waves * 2 + 1) * angle - t * 1.7) * currentParams.waveHeight * 0.3 +
+            Math.sin(3 * angle + t * 0.6) * currentParams.waveHeight * 0.2;
+          break;
       }
 
-      // LissajousとHeart以外は通常の極座標からXYを計算
-      if (currentParams.mode !== 'Lissajous' && currentParams.mode !== 'Heart') {
+      // 極座標からXYへ変換しない(直接x,yを計算する)モード
+      const isDirectXYMode = currentParams.mode === 'Lissajous' || currentParams.mode === 'Heart'
+        || currentParams.mode === 'Epicycloid' || currentParams.mode === 'Hypocycloid';
+
+      if (!isDirectXYMode) {
         x = Math.cos(angle) * radius;
         y = Math.sin(angle) * radius;
       }
@@ -264,7 +324,9 @@ export const GeometricCanvas = () => {
 
   const randomize = () => {
     const modes = ['Wave', 'Chaos', 'Star', 'Rose', 'Spirograph',
-      'Polygon', 'Butterfly', 'Lissajous', 'Web', 'Heart'];
+      'Polygon', 'Butterfly', 'Lissajous', 'Web', 'Heart',
+      'Epicycloid', 'Hypocycloid', 'Lemniscate', 'Snowflake', 'Flower',
+      'Gear', 'Vortex', 'Crystal', 'Pulse', 'Nebula'];
     setParams(prev => ({
       ...prev,  // resolution はそのまま
       strokeColor: `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`,
@@ -427,6 +489,16 @@ export const GeometricCanvas = () => {
             <option value="Lissajous">Lissajous (リサジュー)</option>
             <option value="Web">Web (クモの巣)</option>
             <option value="Heart">Heart (ハート型)</option>
+            <option value="Epicycloid">Epicycloid (エピサイクロイド)</option>
+            <option value="Hypocycloid">Hypocycloid (星芒形)</option>
+            <option value="Lemniscate">Lemniscate (無限大)</option>
+            <option value="Snowflake">Snowflake (雪の結晶)</option>
+            <option value="Flower">Flower (花)</option>
+            <option value="Gear">Gear (歯車)</option>
+            <option value="Vortex">Vortex (渦)</option>
+            <option value="Crystal">Crystal (結晶)</option>
+            <option value="Pulse">Pulse (脈動)</option>
+            <option value="Nebula">Nebula (星雲)</option>
           </select>
         </div>
 

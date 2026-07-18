@@ -1,6 +1,6 @@
 # Artora
 
-幾何学アートジェネレーター。10種類のアルゴリズムとパラメータをリアルタイムで操作して、オリジナルの壁紙を生成・保存できます。
+幾何学アートジェネレーター。20種類のアルゴリズムとパラメータをリアルタイムで操作して、オリジナルの壁紙を生成・保存できます。
 
 <img width="1292" height="1189" alt="image" src="https://github.com/user-attachments/assets/492ceb02-8de7-4a4b-b7c7-f97fad67ff02" />
 
@@ -12,7 +12,7 @@ https://artoram.toramutton.me
 
 ## ✨ 機能
 
-- 10種類の描画アルゴリズム（Wave, Chaos, Rose, Lissajous など）
+- 20種類の描画アルゴリズム（Wave, Chaos, Rose, Lissajous, Epicycloid, Nebula など）
 - パラメータのリアルタイム調整
 - 背景色・線の色のカスタマイズ
 - ランダム生成
