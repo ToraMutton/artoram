@@ -1,4 +1,4 @@
-# Artora
+# Artoram
 
 幾何学アートジェネレーター。20種類のアルゴリズムとパラメータをリアルタイムで操作して、オリジナルの壁紙を生成・保存できます。
 
@@ -27,6 +27,7 @@ https://artoram.toramutton.me
 - Canvas API
 
 ## 🚀 ローカルで動かすには
+
 ```bash
 git clone https://github.com/ToraMutton/artoram.git
 cd artoram
@@ -35,4 +36,5 @@ npm run dev
 ```
 
 ## 😼もっとやさしく
+
 たのしく、じゆうにちょさくけんフリーのかべがみがつくれます！
